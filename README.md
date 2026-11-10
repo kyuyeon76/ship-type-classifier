@@ -1,100 +1,108 @@
-# 이미지 기반 머신러닝을 활용한 선박 종류 분류 (8조)
+**English** | [한국어](README.ko.md)
 
-2026년 1학기 **인공지능 기초와 실습** 팀 프로젝트 과제입니다.
+# Ship Type Classifier
 
-선박 사진을 컨테이너선(container), 여객선(passenger), 유조선(tanker) 세 종류로 자동 분류하는 모델을 scikit-learn으로 만들었습니다. 이미지를 흑백으로 넣을지 컬러로 넣을지, 그리고 어떤 알고리즘을 쓸지를 모두 조합해 비교한 뒤 가장 정확도가 높은 조합을 골랐습니다.
+Classifies ship photos into three types (**container**, **passenger**, **tanker**) with classic scikit-learn models. We compared grayscale and RGB inputs across four algorithms and picked the best combination.
 
-코드는 `8조_학습코드 .ipynb` 노트북 하나에 모두 들어 있습니다.
+Team project for *Introduction to AI and Practice* (Spring 2026), 5-person team.
 
-## 데이터
+All code is in a single notebook: `8조_학습코드 .ipynb`.
 
-- 팀원들이 구글 이미지 검색으로 직접 모은 사진 280장 (3개 클래스)
-- 학습 80% / 테스트 20%로 나눴습니다. (테스트 56장: container 23, passenger 16, tanker 17)
-- 원본 사진은 이 저장소에 포함하지 않았습니다.
+## My Role
 
-## 전처리
+I collected training images and made the presentation slides. The model code was written by other team members.
 
-`preprocess_images_advanced()` 함수 하나로 처리합니다. 폴더를 돌면서 이미지를 읽고, 읽기에 실패한 파일은 `continue`로 건너뜁니다.
+## Dataset
 
-1. **Resize**: `cv2.resize`로 64×64로 통일
-2. **색 변환**: 흑백(`COLOR_BGR2GRAY`) 또는 컬러(`COLOR_BGR2RGB`, OpenCV의 BGR 순서를 RGB로 바꿈)
-3. **Flatten**: 1차원 벡터로 펴기 → 흑백 4,096차원 / 컬러 12,288차원
-4. **정규화**: `MinMaxScaler`로 0~1 범위로 스케일링
+- 280 images across 3 classes, collected by the team via Google Image Search
+- 80/20 train/test split (test set: 56 images, with 23 container, 16 passenger and 17 tanker)
+- The raw images are not included in this repository.
 
-흑백은 선박의 윤곽과 형태 위주로 학습하고 계산이 가볍습니다. 컬러는 선체 색, 도색, 화물 색 같은 정보를 그대로 남깁니다.
+## Preprocessing
 
-## 실험 설계
+A single function, `preprocess_images_advanced()`, walks each class folder and skips files that fail to load.
 
-데이터 2종 × 모델 4종 = 8가지 조합을 이중 반복문으로 한 번에 돌렸습니다. 바깥 반복문은 데이터셋(흑백/컬러)을 고르고 학습/테스트로 나누며, 안쪽 반복문은 모델 4개를 차례로 학습(`fit`) → 예측(`predict`) → 정확도 계산(`accuracy_score`)하고 결과를 모아 둡니다.
+1. **Resize** to 64×64 with `cv2.resize`
+2. **Color conversion**: grayscale (`COLOR_BGR2GRAY`) or RGB (`COLOR_BGR2RGB`, converting from OpenCV's BGR order)
+3. **Flatten** to a 1-D vector: 4,096 features (grayscale) / 12,288 features (RGB)
+4. **Normalize** to [0, 1] with `MinMaxScaler`
 
-| 모델 | 설정 | 특징 |
+Grayscale keeps shape and silhouette and is cheaper to compute. RGB keeps hull color, paint and cargo color.
+
+## Experiment
+
+2 input formats × 4 models = 8 runs, automated with a nested loop. The outer loop picks a dataset and splits it, and the inner loop runs `fit` → `predict` → `accuracy_score` for each model and stores the result.
+
+| Model | Parameters | Notes |
 |---|---|---|
-| Random Forest | `n_estimators=100` | 여러 결정 트리의 다수결. 노이즈에 강함 |
-| SVM | RBF 커널, `C=10` | 클래스 사이 간격이 가장 넓은 경계를 찾음. 고차원 데이터에 강함 |
-| KNN | `n_neighbors=5` | 가장 가까운 이미지 5개의 클래스를 따름 |
-| Logistic Regression | `max_iter=1000` | 가중합으로 클래스별 확률을 계산. 빠르지만 경계가 선형 |
+| Random Forest | `n_estimators=100` | Majority vote of decision trees; robust to noise |
+| SVM | RBF kernel, `C=10` | Max-margin boundary; strong on high-dimensional data |
+| KNN | `n_neighbors=5` | Label of the 5 nearest images |
+| Logistic Regression | `max_iter=1000` | Linear model; fast, but limited to linear boundaries |
 
-공통 설정: `TEST_SIZE = 0.2`, `IMG_SIZE = 64`, `RANDOM_SEED = 123123`
+Shared settings: `TEST_SIZE = 0.2`, `IMG_SIZE = 64`, `RANDOM_SEED = 123123`
 
-## 결과
+## Results
 
-| 모델 | 흑백 (4,096차원) | 컬러 (12,288차원) |
+| Model | Grayscale (4,096) | RGB (12,288) |
 |---|---|---|
 | Random Forest | 53.57% | 53.57% |
 | SVM | 58.93% | **64.29%** |
 | KNN | 30.36% | 51.79% |
 | Logistic Regression | 55.36% | 55.36% |
 
-**컬러 + SVM 조합이 64.29%로 가장 높아서 최종 모델로 골랐습니다.**
+**RGB + SVM scored highest at 64.29% and was selected as the final model.**
 
-### 분석
+### Analysis
 
-- **컬러가 도움이 된 경우**: KNN은 흑백 30.36% → 컬러 51.79%로 21%p 올랐습니다. 선박 하단의 붉은 방오도료나 컨테이너의 원색 배치처럼, 흑백으로 바꾸면 회색으로 뭉개지는 정보가 분류에 단서가 된 것으로 봤습니다.
-- **SVM + 컬러가 가장 좋았던 이유**: 12,288차원이라는 높은 차원에서도 경계를 잘 찾는 SVM의 특성과 색상 정보가 잘 맞았습니다.
-- **그런데 컬러가 항상 이기지는 않았습니다**: Random Forest와 Logistic Regression은 흑백과 컬러 결과가 같았습니다. 이유를 두 가지로 생각했습니다.
-  - *차원 문제*: 사진 수는 그대로인데 변수가 3배로 늘어나서 과적합되기 쉽습니다.
-  - *색상 노이즈*: 사진 대부분이 바다와 하늘이라, 날씨나 시간대에 따라 바뀌는 배경 색을 배의 특징으로 잘못 배울 수 있습니다. 흑백은 이 노이즈가 줄어 형태에 더 집중합니다.
+- **When color helped**: KNN jumped from 30.36% to 51.79% (+21 %p) with RGB. Cues like red anti-fouling paint near the waterline or multicolored container stacks get flattened into gray in grayscale.
+- **Why RGB + SVM won**: SVM handles the 12,288-dimensional space well, and color gave it clearer boundaries between classes.
+- **Why RGB didn't always win**: Random Forest and Logistic Regression scored the same on both inputs. Our explanation:
+  - *Dimensionality*: the same 280 images now have 3× the features, which makes overfitting easier.
+  - *Color noise*: most of each photo is sea and sky, whose color changes with weather and time of day. Models can latch onto background color instead of the ship. Grayscale removes that noise and leaves shape.
 
-### 최종 모델 평가 (컬러 + SVM)
+### Final Model (RGB + SVM)
 
-| 클래스 | precision | recall | f1-score | 테스트 수 |
+| Class | Precision | Recall | F1 | Support |
 |---|---|---|---|---|
 | container | 0.60 | 0.65 | 0.62 | 23 |
 | passenger | 0.80 | 0.75 | 0.77 | 16 |
 | tanker | 0.56 | 0.53 | 0.55 | 17 |
-| **전체 정확도** | | | **0.64** | 56 |
+| **Accuracy** | | | **0.64** | 56 |
 
-<img src="docs/confusion_matrix.png" width="420" alt="혼동 행렬">
+<img src="docs/confusion_matrix.png" width="420" alt="Confusion matrix">
 
-여객선은 비교적 잘 맞혔고, 유조선이 가장 많이 틀렸습니다.
+Passenger ships were the easiest to identify; tankers were confused most often.
 
-### 예측 예시
+### Sample Predictions
 
-테스트 이미지를 64×64 그대로 복원한 것입니다. 파란 글씨는 정답, 빨간 글씨는 오답입니다.
+Test images reconstructed from the 64×64 input. Blue = correct, red = wrong.
 
-![예측 결과](docs/predictions.png)
+![Predictions](docs/predictions.png)
 
-틀린 사례들을 보고 원인을 이렇게 추정했습니다.
-- 어둡고 각진 선체를 컨테이너선의 어두운 선체와 혼동
-- 배보다 바다·배경 비중이 큰 사진에서 배경에 끌려간 판단
-- 64×64로 줄이면서 선박의 세부 구조가 사라짐
+Likely causes of errors:
+- Dark, angular hulls mistaken for container ships
+- Photos where background dominates the ship
+- Fine structural details lost at 64×64
 
-## 개선 방향
+## Future Work
 
-- **데이터**: 클래스별로 수백 장 이상, 다양한 각도·날씨·시간대 사진을 균형 있게 모으기. 또는 배경이 단순하고 배가 가운데 있는 사진만 고르기
-- **전처리**: 객체 탐지로 선박 부분만 잘라낸 뒤 학습해 배경 영향을 줄이기. 해상도를 128×128 이상으로 올리기
+- **Data**: Hundreds of images per class, balanced across angles, weather, time of day and port settings. Alternatively, filter for simple backgrounds with the ship centered.
+- **Preprocessing**: Crop the ship with an object detector before training to reduce background influence; raise resolution to 128×128 or more.
 
-## 실행 방법
+## Tech Stack
 
-Google Colab에서 실행하도록 작성했습니다.
+Python, scikit-learn, OpenCV, NumPy, Matplotlib, Seaborn, Google Colab
 
-1. 구글 드라이브에 아래 구조로 이미지를 넣습니다.
+## Getting Started
+
+The notebook is written for Google Colab.
+
+1. Put images in Google Drive with this layout:
    ```
    MyDrive/Colab Notebooks/dataset/
    ├── container/
    ├── passenger/
    └── tanker/
    ```
-2. 노트북을 Colab에서 열고 위에서부터 차례로 실행합니다.
-
-사용 라이브러리: numpy, opencv-python, scikit-learn, matplotlib, seaborn
+2. Open the notebook in Colab and run the cells top to bottom.
